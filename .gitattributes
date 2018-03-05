@@ -1,0 +1,3 @@
+# Force normalization of EOL to LF for files auto-detected as text within the repository.
+# This will not, however, force a particular EOL within a checked-out working directory.
+* text=auto

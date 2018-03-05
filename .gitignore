@@ -1,0 +1,72 @@
+# Ignored whole directories
+build
+bdist
+install
+3rdparty
+
+# Ignored file extensions
+## Preprocessed files
+**.i
+
+## Executable Object Files
+**.[ao]
+**.bin
+**.dll
+**.exe
+**.lib
+**.so
+**.dylib
+
+## Python
+**.pyc
+**.pyo
+**.egg-info
+**.egg
+**.whl
+
+## Binary Data Files
+**.hdf5
+**.h5
+**.npz
+**.pkl
+
+## Archive Files
+**.bz2
+**.gz
+**.lzma
+**.tar
+**.xz
+
+## Multimedia
+**.jpg
+**.jpeg
+**.JPG
+**.JPEG
+**.png
+**.gif
+**.bmp
+
+## Documents
+**.doc
+**.docx
+**.log
+**.od*
+**.pdf
+**.txt
+
+## TeX
+**.aux
+**.blg
+**.synctex.gz
+
+## Backup File
+**.bak
+**.swp
+**~
+
+# Must not ignore Meson build files.
+!**/meson.build
+
+
+# Project-specific ignores
+nauka/version.py
