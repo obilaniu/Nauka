@@ -43,8 +43,10 @@ def getIntFromPBKDF2         (nbits, password, salt="", rounds=1, hash="sha256",
 	return i
 
 def getNpRandomStateFromPBKDF2      (password, salt="", rounds=1, hash="sha256"):
-	buf   = pbkdf2(624*4, password, salt, rounds, hash)
-	return ("MT19937", np.frombuffer(buf, dtype=np.uint32), 624, 0, 0.0)
+	uint32le = np.dtype(np.uint32).newbyteorder("<")
+	buf      = pbkdf2(624*4, password, salt, rounds, hash)
+	buf      = np.frombuffer(buf, dtype=uint32le).copy("C")
+	return ("MT19937", buf, 624, 0, 0.0)
 
 def seedNpRandomFromPBKDF2          (password, salt="", rounds=1, hash="sha256"):
 	npRandomState = getNpRandomStateFromPBKDF2(password, salt, rounds, hash)
@@ -81,6 +83,9 @@ def seedTorchCudaManualAllFromPBKDF2(password, salt="", rounds=1, hash="sha256")
 	seed = getTorchRandomSeedFromPBKDF2(password, salt, rounds, hash)
 	torch.cuda.manual_seed_all(seed)
 	return seed
+
+class PlainObject(object):
+	pass
 
 class OptimizerAction(Ap.Action):
 	def __init__(self, **kwargs):

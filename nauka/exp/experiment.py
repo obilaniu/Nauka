@@ -89,6 +89,7 @@ class Experiment(object):
 		Returns `self` afterwards.
 		
 		"""
+		
 		return self
 	
 	def dump(self, path):
@@ -128,7 +129,7 @@ class Experiment(object):
 		
 		Returns `self`."""
 		
-		return self
+		return self.load(path)
 	
 	
 	#

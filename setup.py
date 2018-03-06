@@ -14,7 +14,7 @@ from   setuptools import setup, find_packages, Extension
 def getVersionInfo():
 	naukaVerMajor  = 0
 	naukaVerMinor  = 0
-	naukaVerPatch  = 0
+	naukaVerPatch  = 1
 	naukaVerIsRel  = True
 	naukaVerPreRel = "dev0"
 	
