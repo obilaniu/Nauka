@@ -84,6 +84,25 @@ def seedTorchCudaManualAllFromPBKDF2(password, salt="", rounds=1, hash="sha256")
 	torch.cuda.manual_seed_all(seed)
 	return seed
 
+def getTorchOptimizerFromAction(params, spec, **kwargs):
+	from torch.optim import (SGD, RMSprop, Adam,)
+	
+	if   spec.name in ["sgd", "nag"]:
+		return SGD    (params, spec.lr, spec.mom,
+		               nesterov=(spec.name=="nag"),
+		               **kwargs)
+	elif spec.name in ["rmsprop"]:
+		return RMSprop(params, spec.lr, spec.rho, spec.eps, **kwargs)
+	elif spec.name in ["adam"]:
+		return Adam   (params, spec.lr, (spec.beta1, spec.beta2), spec.eps,
+		               **kwargs)
+	elif spec.name in ["amsgrad"]:
+		return Adam   (params, spec.lr, (spec.beta1, spec.beta2), spec.eps,
+		               amsgrad=True,
+		               **kwargs)
+	else:
+		raise NotImplementedError("Optimizer "+spec.name+" not implemented!")
+
 class PlainObject(object):
 	pass
 
@@ -104,8 +123,7 @@ class OptimizerAction(Ap.Action):
 		
 		setattr(namespace, self.dest, Ap.Namespace())
 		ns = getattr(namespace, self.dest)
-		#ns.__dict__.update(
-		args, kwargs = OptimizerAction.parseOptSpec(values)
+		ns.__dict__.update(**OptimizerAction.parseOptSpec(values))
 	
 	@staticmethod
 	def parseOptSpec   (values):
@@ -188,6 +206,8 @@ class OptimizerAction(Ap.Action):
 			return OptimizerAction.filterNAG(*args, **kwargs)
 		elif name in ["adam"]:
 			return OptimizerAction.filterAdam(*args, **kwargs)
+		elif name in ["amsgrad"]:
+			return OptimizerAction.filterAmsgrad(*args, **kwargs)
 		elif name in ["rmsprop"]:
 			return OptimizerAction.filterRmsprop(*args, **kwargs)
 		elif name in ["yf", "yfin", "yellowfin"]:
@@ -226,6 +246,11 @@ class OptimizerAction(Ap.Action):
 		
 		d = locals()
 		d["name"] = "adam"
+		return d
+	@staticmethod
+	def filterAmsgrad  (lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8):
+		d = OptimizerAction.filterAdam(lr, beta1, beta2, eps)
+		d["name"] = "amsgrad"
 		return d
 	@staticmethod
 	def filterRmsprop  (lr=1e-3, rho=0.9, eps=1e-8):
@@ -358,18 +383,6 @@ class Subcommand(object):
 				yield s
 	
 	@classmethod
-	def addAllArgs(kls, argp=None):
-		argp = Ap.ArgumentParser(**kls.parserArgs) if argp is None else argp
-		kls.addRun(argp)
-		subcommands = list(kls.subcommands())
-		if subcommands:
-			subp = argp.add_subparsers(**kls.subparserArgs)
-			for s in subcommands:
-				s.addToSubparser(subp)
-		kls.addArgs(argp)
-		return argp
-	
-	@classmethod
 	def addToSubparser(kls, subp):
 		argp = subp.add_parser(kls.name(), **kls.parserArgs)
 		return kls.addAllArgs(argp)
@@ -379,10 +392,22 @@ class Subcommand(object):
 		pass
 	
 	@classmethod
-	def addRun(kls, argp):
-		argp.set_defaults(__cmd__=kls.run)
+	def addAllArgs(kls, argp=None):
+		argp        = Ap.ArgumentParser(**kls.parserArgs) if argp is None else argp
+		subcommands = list(kls.subcommands())
+		if subcommands:
+			subp = argp.add_subparsers(**kls.subparserArgs)
+			for s in subcommands:
+				s.addToSubparser(subp)
+		argp.set_defaults(
+		    __argp__ = argp,
+		    __kls__  = kls,
+		)
+		kls.addArgs(argp)
+		return argp
 	
 	@classmethod
-	def run(kls, a):
+	def run(kls, a, *args, **kwargs):
+		a.__argp__.print_help()
 		return 0
 

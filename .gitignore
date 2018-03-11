@@ -23,6 +23,7 @@ install
 **.egg-info
 **.egg
 **.whl
+**/__pycache__/
 
 ## Binary Data Files
 **.hdf5
@@ -69,4 +70,4 @@ install
 
 
 # Project-specific ignores
-nauka/version.py
+src/nauka/version.py

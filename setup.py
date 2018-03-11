@@ -14,7 +14,7 @@ from   setuptools import setup, find_packages, Extension
 def getVersionInfo():
 	naukaVerMajor  = 0
 	naukaVerMinor  = 0
-	naukaVerPatch  = 1
+	naukaVerPatch  = 2
 	naukaVerIsRel  = True
 	naukaVerPreRel = "dev0"
 	
@@ -92,7 +92,7 @@ if __name__ == "__main__":
 	#
 	versionInfo = getVersionInfo()
 	naukaVerFull = versionInfo["naukaVerFull"]
-	with open(os.path.join(getRoot(), "nauka", "version.py"), "w") as f:
+	with open(os.path.join(getRoot(), "src", "nauka", "version.py"), "w") as f:
 		writeVersionFile(f, versionInfo)
 	
 	
@@ -148,7 +148,9 @@ meaning "science".""",
 	    ],
 	    
 	    # Sources
-	    packages             = find_packages(),
+	    packages             = find_packages("src"),
+	    package_dir          = {'': 'src'},
+	    python_requires      = '>=3.4',
 	    install_requires     = [
 	        "numpy>=1.10",
 	    ],
