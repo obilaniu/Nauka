@@ -16,6 +16,7 @@ import random
 import re
 import sys
 import time
+import warnings
 
 
 
@@ -366,6 +367,35 @@ class CudaDeviceAction(Ap.Action):
 		
 		return deviceIds
 
+class PresetAction(Ap.Action):
+	def __init__(self, **kwargs):
+		if kwargs.get("default", None) is not None:
+			warnings.warn("A preset cannot be given a default!")
+		
+		if "choices" not in kwargs:
+			raise ValueError("Must provide a dictionary of presets!")
+		else:
+			self.presets = kwargs["choices"]
+		if not isinstance(self.presets, dict):
+			raise TypeError("Preset choices must be a dictionary!")
+		
+		for presetName, preset in self.presets.items():
+			if not isinstance(presetName, str):
+				raise TypeError("Preset names must be of type \"str\", but "
+				                "one of them is not!")
+			if not isinstance(preset,     list):
+				raise TypeError("Presets must be a list of strings, but "
+				                "one of them is not!")
+		
+		kwargs["default"] = None
+		kwargs["choices"] = list(self.presets.keys())
+		kwargs["nargs"]   = None
+		kwargs["type"]    = str
+		
+		super().__init__(**kwargs)
+	
+	def __call__(self, parser, ns, values, option_string):
+		parser.parse_args(self.presets[values], ns)
 
 class Subcommand(object):
 	cmdname       = None

@@ -1,2 +1,4 @@
 graft scripts
+recursive-include scripts *.py  *.txt *.in
 prune scripts/__pycache__
+recursive-exclude scripts *.pyc *.pyo
