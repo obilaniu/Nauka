@@ -1,0 +1,4 @@
+Nauka is a collection of utilities for scientific experiments.
+
+The name "Nauka" is a rough transliteration of the Ukrainian word "Наука",
+meaning "science".
