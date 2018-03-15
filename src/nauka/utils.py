@@ -287,10 +287,10 @@ class OptimizerAction(Ap.Action):
 class CudaDeviceAction(Ap.Action):
 	def __init__(self, **kwargs):
 		#
-		# If this flag is given, but without argument device IDs, the default
-		# interpretation is "want CUDA, best guess at devices". The default
-		# interpretation can be changed by providing the `const` argument of
-		# argparse.Action.
+		# If a CudaDeviceAction flag is given, but without argument device IDs,
+		# the default interpretation is "want CUDA, best guess at devices". The
+		# default interpretation can be changed by providing the `const`
+		# argument of argparse.Action.
 		#
 		if "const" not in kwargs:
 			#
@@ -320,6 +320,7 @@ class CudaDeviceAction(Ap.Action):
 		kwargs["nargs"]   = "?"
 		kwargs["default"] = []
 		kwargs["type"]    = str
+		kwargs.setdefault("help",    "List of CUDA device ids to use.")
 		super().__init__(**kwargs)
 	
 	def __call__(self, parser, ns, values, option_string):
@@ -369,8 +370,8 @@ class CudaDeviceAction(Ap.Action):
 
 class PresetAction(Ap.Action):
 	def __init__(self, **kwargs):
-		if kwargs.get("default", None) is not None:
-			warnings.warn("A preset cannot be given a default!")
+		if kwargs.get("default", Ap.SUPPRESS) != Ap.SUPPRESS:
+			warnings.warn("A PresetAction ignores the default= keyword argument!")
 		
 		if "choices" not in kwargs:
 			raise ValueError("Must provide a dictionary of presets!")
@@ -387,7 +388,7 @@ class PresetAction(Ap.Action):
 				raise TypeError("Presets must be a list of strings, but "
 				                "one of them is not!")
 		
-		kwargs["default"] = None
+		kwargs["default"] = Ap.SUPPRESS
 		kwargs["choices"] = list(self.presets.keys())
 		kwargs["nargs"]   = None
 		kwargs["type"]    = str
@@ -396,6 +397,47 @@ class PresetAction(Ap.Action):
 	
 	def __call__(self, parser, ns, values, option_string):
 		parser.parse_args(self.presets[values], ns)
+
+class DirPathAction(Ap.Action):
+	ENVVAR     = None
+	DEFDEFVAL  = None
+	HELPSTRING = None
+	
+	def __init__(self, **kwargs):
+		"""
+		For DirPathActions, the argument-handling logic is as follows:
+		
+		  - If arg explicitly given, use that.
+		  - If arg not given but ENVVAR set, use that.
+		  - If arg not given and ENVVAR unset, but default set, use that.
+		  - If arg not given,    ENVVAR unset  and default unset, use DEFDEFVAL.
+		"""
+		defaultNoEnv = kwargs.get("default", self.DEFDEFVAL)
+		default = os.environ.get(self.ENVVAR, defaultNoEnv)
+		kwargs["default"] = default
+		kwargs["nargs"]   = None
+		kwargs.setdefault("type", str)
+		kwargs.setdefault("help", self.HELPSTRING)
+		super().__init__(**kwargs)
+	
+	def __call__(self, parser, ns, values, option_string):
+		setattr(ns, self.dest, values)
+
+class BaseDirPathAction(DirPathAction):
+	ENVVAR     = "NAUKA_BASEDIR"
+	DEFDEFVAL  = "work"
+	HELPSTRING = "Path to the base directory from which this experiment's true " \
+	             "working directory will be derived."
+
+class DataDirPathAction(DirPathAction):
+	ENVVAR     = "NAUKA_DATADIR"
+	DEFDEFVAL  = "data"
+	HELPSTRING = "Path to the datasets directory."
+
+class TmpDirPathAction(DirPathAction):
+	ENVVAR     = "NAUKA_TMPDIR"
+	DEFDEFVAL  = "tmp"
+	HELPSTRING = "Path to a local, fast-storage, temporary directory."
 
 class Subcommand(object):
 	cmdname       = None
