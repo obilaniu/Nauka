@@ -1,6 +1,6 @@
 # Ignored whole directories
 build
-bdist
+dist
 install
 3rdparty
 

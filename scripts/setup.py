@@ -80,11 +80,11 @@ setup(
         "Topic :: Software Development",
         "Topic :: Utilities",
     ],
-    packages             = find_packages("src"),
-    package_dir          = {'': 'src'},
     python_requires      = '>=3.4',
     install_requires     = [
         "numpy>=1.10",
     ],
+    packages             = find_packages("src"),
+    package_dir          = {'': 'src'},
     zip_safe             = False,
 )
