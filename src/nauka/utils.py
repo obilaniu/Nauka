@@ -439,6 +439,27 @@ class TmpDirPathAction(DirPathAction):
 	DEFDEFVAL  = "tmp"
 	HELPSTRING = "Path to a local, fast-storage, temporary directory."
 
+class FastDebugAction(Ap.Action):
+	def __init__(self, **kwargs):
+		kwargs.setdefault("metavar", "N")
+		kwargs.setdefault("const",   5)
+		kwargs["const"]   = int(kwargs["const"])
+		kwargs["nargs"]   = "?"
+		kwargs["default"] = 0
+		kwargs["type"]    = int
+		kwargs.setdefault("help",
+		    """
+		    For debug purposes, run only a tiny number of epochs and iterations
+		    per epoch (for both training & validation), thus exercising all of
+		    the code quickly. The default is {:d} iterations.
+		    """
+		    [1:-1].format(kwargs["const"])
+		)
+		super().__init__(**kwargs)
+	
+	def __call__(self, parser, namespace, values, option_string):
+		setattr(namespace, self.dest, values)
+
 class Subcommand(object):
 	cmdname       = None
 	parserArgs    = {}
