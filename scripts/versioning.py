@@ -12,9 +12,9 @@ verMajor  = 0
 # int:  Minor version.
 verMinor  = 0
 # int:  Patch version.
-verPatch  = 6
+verPatch  = 7
 # bool: Whether this is a release or not.
-verIsRel  = True
+verIsRel  = False
 # str:  Additional suffix for pre-release versions. Empty for releases.
 verPreRel = ""
 
