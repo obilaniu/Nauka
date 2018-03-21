@@ -14,7 +14,7 @@ verMinor  = 0
 # int:  Patch version.
 verPatch  = 7
 # bool: Whether this is a release or not.
-verIsRel  = False
+verIsRel  = True
 # str:  Additional suffix for pre-release versions. Empty for releases.
 verPreRel = ""
 
