@@ -5,5 +5,5 @@
 #
 # Other packages follow.
 #
-from .version import version as __version__
+from .version import __version__
 from .        import ap, exp, utils, version

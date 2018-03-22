@@ -49,12 +49,12 @@ with open(os.path.join(git.getSrcRoot(),
 #
 setup(
     name                 = packageName,
-    version              = versioning.verFull,
+    version              = versioning.verPublic,
     author               = "Olexa Bilaniuk",
     author_email         = "anonymous@anonymous.com",
     license              = "MIT",
     url                  = githubURL,
-    download_url         = githubURL+"/archive/v{}.tar.gz".format(versioning.verNormal),
+    download_url         = githubURL+"/archive/v{}.tar.gz".format(versioning.verRelease),
     description          = "A collection of utilities for scientific experiments.",
     long_description     = long_description,
     classifiers          = [
