@@ -6,4 +6,4 @@
 # Other packages follow.
 #
 from .version import __version__
-from .        import ap, exp, utils, version
+from .        import ap, exp, fhs, utils, version
