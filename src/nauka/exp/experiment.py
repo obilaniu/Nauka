@@ -17,8 +17,6 @@ class Experiment(object):
 	The hierarchical organization of files within an experiment is as follows:
 	
 		Experiment
-		*   dataDir/                   | The folder where the datasets are found and loaded from.
-		*   tempDir/                   | A folder on the local disk for temporary files.
 		*   workDir/                   | The main working directory.
 			->  snapshot/              | Snapshot directory
 				-> <#>/                | Snapshot numbered <#>
@@ -35,9 +33,6 @@ class Experiment(object):
 	
 	def __init__(self, workDir="."):
 		self.__workDir = os.path.abspath(workDir)
-		
-		self.mkdirp(self.workDir)
-		self.mkdirp(self.snapDir)
 	
 	
 	#
@@ -58,7 +53,7 @@ class Experiment(object):
 		return os.path.join(self.snapDir, "latest")
 	@property
 	def latestSnapshotNum(self):
-		if self.haveSnapshots():
+		if self.haveSnapshots:
 			s = os.readlink(self.latestLink)
 			s = int(s, base=10)
 			assert(s >= 0)
@@ -72,6 +67,10 @@ class Experiment(object):
 	@property
 	def nextSnapshotNum(self):
 		return self.latestSnapshotNum+1
+	@property
+	def haveSnapshots(self):
+		"""Check if we have at least one snapshot."""
+		return os.path.islink(self.latestLink) and os.path.isdir(self.latestLink)
 	
 	#
 	# Mutable State Management.
@@ -87,7 +86,6 @@ class Experiment(object):
 		checkpoint with the given `path`.
 		
 		Returns `self` afterwards.
-		
 		"""
 		
 		return self
@@ -153,18 +151,14 @@ class Experiment(object):
 		Returns `self`."""
 		
 		if n is None:
-			if self.haveSnapshots(): return self.fromSnapshot(self.latestLink)
-			else:                    return self.fromScratch()
+			if self.haveSnapshots: return self.fromSnapshot(self.latestLink)
+			else:                  return self.fromScratch()
 		elif isinstance(n, int):
 			loadSnapshotPath = self.getFullPathToSnapshot(n)
 			assert(os.path.isdir(loadSnapshotPath))
 			return self.__markLatest(n).fromSnapshot(loadSnapshotPath)
 		else:
 			raise ValueError("n must be int, or None!")
-	
-	def haveSnapshots        (self):
-		"""Check if we have at least one snapshot."""
-		return os.path.islink(self.latestLink) and os.path.isdir(self.latestLink)
 	
 	def purge                (self,
 	                          strategy           = "klogn",
@@ -184,7 +178,7 @@ class Experiment(object):
 		
 		assert(isinstance(keep, (list, set))  or  keep is None)
 		keep = set(keep or [])
-		if self.haveSnapshots():
+		if self.haveSnapshots:
 			if   strategy == "lastk":
 				keep.update(self.strategyLastK(self.latestSnapshotNum, **kwargs))
 			elif strategy == "klogn":
@@ -240,33 +234,31 @@ class Experiment(object):
 	# Filesystem Utilities
 	#
 	@classmethod
-	def mkdirp(kls, path):
+	def mkdirp(kls, path, mode=0o755):
 		"""`mkdir -p path/to/folder`. Creates a folder and all parent
 		directories if they don't already exist."""
-		
-		dirStack = []
-		while not os.path.isdir(path):
-			dirStack += [os.path.basename(path)]
-			path      =  os.path.dirname (path)
-		while dirStack:
-			path = os.path.join(path, dirStack.pop())
-			os.mkdir(path)
+		os.makedirs(path, mode=mode, exist_ok=True)
 	
 	@classmethod
 	def isFilenameInteger(kls, name):
+		"""Report whether the given string is a non-negative, 0-prefix-free,
+		decimal integer."""
 		return re.match("^(0|[123456789]\d*)$", name)
 	
 	@classmethod
 	def listSnapshotDir(kls, path):
-		entryList      = os.listdir(path)
+		"""Return the set of snapshot directories and non-snapshot directories
+		under the given path."""
 		snapshotSet    = set()
 		nonsnapshotSet = set()
-		
-		for e in entryList:
-			if kls.isFilenameInteger(e): snapshotSet   .add(e)
-			else:                        nonsnapshotSet.add(e)
-		
-		return snapshotSet, nonsnapshotSet
+		try:
+			entryList = os.listdir(path)
+			for e in entryList:
+				if kls.isFilenameInteger(e): snapshotSet   .add(e)
+				else:                        nonsnapshotSet.add(e)
+		except FileNotFoundError: pass
+		finally:
+			return snapshotSet, nonsnapshotSet
 	
 	@classmethod
 	def rmR(kls, path):
