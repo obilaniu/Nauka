@@ -6,13 +6,9 @@ import numbers, math
 #
 # Parse from spec
 #
-def fromSpecSingle(spec, *args, **kwargs):
+def fromSpec(spec):
 	if   spec.name == "const":
 		return ConstLR(spec.lr)
-	elif spec.name == "prod":
-		return ProdLR(*args)
-	elif spec.name == "clamp":
-		return ClampLR(kwargs["lr"], spec.lrMin, spec.lrMax)
 	elif spec.name == "step":
 		return StepLR(spec.stepSize, spec.gamma)
 	elif spec.name == "exp":
@@ -29,39 +25,6 @@ def fromSpecSingle(spec, *args, **kwargs):
 		                 spec.thresholdMode, spec.verbose)
 	else:
 		raise NotImplementedError("LR Schedule "+spec.name+" not implemented!")
-
-def fromSpec(specs):
-	specs = list(specs)
-	
-	if len(specs) == 0:
-		return ConstLR()
-	if len(specs) == 1:
-		if specs[0].name == "clamp":
-			return fromSpecSingle(specs[0], lr=ConstLR())
-		else:
-			return fromSpecSingle(specs[0])
-	
-	i = 0
-	while i<len(specs):
-		if   specs[i].name == "prod":
-			specs[i] = fromSpecSingle(specs[i], *specs[:i])
-			specs    = specs[i:]
-			i        = 1
-		elif specs[i].name == "clamp":
-			if i==0:
-				specs[i] = fromSpecSingle(specs[i], lr=ConstLR())
-				i += 1
-			else:
-				specs[i] = fromSpecSingle(specs[i], lr=specs[i-1])
-				specs.pop(i-1)
-		else:
-			specs[i] = fromSpecSingle(specs[i])
-			i       += 1
-	
-	if len(specs) == 1:
-		return specs[0]
-	else:
-		return ProdLR(*specs)
 
 
 #
@@ -116,7 +79,8 @@ class _LRBase(numbers.Real):
 				if isinstance(child, _LRBase):
 					child.step(memo=memo, **kwargs)
 	
-	def _step        (self):    self._stepNum += 1
+	def _step        (self, *args, **kwargs):
+		self._stepNum += 1
 	
 	@property
 	def stepNum      (self):    return int(self._stepNum)

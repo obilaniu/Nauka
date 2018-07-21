@@ -419,7 +419,7 @@ class LRSchedule         (Action):
 		elif isinstance(defaultOpt, str):
 			defaultOpt = [Namespace(**self.parseLRSpec(defaultOpt))]
 		else:
-			raise ValueError("Invalid LR default={}"+repr(defaultOpt))
+			raise ValueError("Invalid LR default="+repr(defaultOpt))
 		kwargs["default"] = defaultOpt
 		kwargs["metavar"] = "LRSPEC"
 		kwargs["nargs"]   = None
@@ -427,39 +427,43 @@ class LRSchedule         (Action):
 		super().__init__(**kwargs)
 	
 	def __call__(self, parser, ns, values, option_string):
-		l = getattr(ns, self.dest, [])
-		l.append(Namespace(**self.parseLRSpec(values)))
-		setattr(ns, self.dest, l)
+		setattr(ns, self.dest, self.parseLRSpec(values))
 	
 	@classmethod
 	def parseLRSpec   (cls, values):
-		try:
-			return nauka.utils.lr.ConstLR(values)
-		except: pass
-		name, args, kwargs = _parseSpec(values)
-		
-		if   name in ["lambda"]:
-			raise ValueError("LR schedule {} cannot be parsed from arguments!".format(repr(name)))
-		elif name in ["k", "const", "constant"]:
-			return cls.filterConst   (*args, **kwargs)
-		elif name in ["prod", "product"]:
-			return cls.filterProd    (*args, **kwargs)
-		elif name in ["clamp"]:
-			return cls.filterClamp   (*args, **kwargs)
-		elif name in ["step"]:
-			return cls.filterStep    (*args, **kwargs)
-		elif name in ["exp"]:
-			return cls.filterExp     (*args, **kwargs)
-		elif name in ["cos"]:
-			return cls.filterCos     (*args, **kwargs)
-		elif name in ["saw", "sawtooth"]:
-			return cls.filterSawtooth(*args, **kwargs)
-		elif name in ["tri", "triangle"]:
-			return cls.filterTriangle(*args, **kwargs)
-		elif name in ["plateau"]:
-			return cls.filterPlateau (*args, **kwargs)
+		values = values.split("\\")
+		for i in range(len(values)):
+			try:
+				values[i] = nauka.utils.lr.ConstLR(values[i])
+			except:
+				name, args, kwargs = _parseSpec(values[i])
+				
+				if   name in ["lambda", "prod", "product", "clamp"]:
+					raise ValueError("LR schedule {} cannot be parsed from arguments!".format(repr(name)))
+				elif name in ["k", "const", "constant"]:
+					values[i] = cls.filterConst   (*args, **kwargs)
+				elif name in ["step"]:
+					values[i] = cls.filterStep    (*args, **kwargs)
+				elif name in ["exp"]:
+					values[i] = cls.filterExp     (*args, **kwargs)
+				elif name in ["cos"]:
+					values[i] = cls.filterCos     (*args, **kwargs)
+				elif name in ["saw", "sawtooth"]:
+					values[i] = cls.filterSawtooth(*args, **kwargs)
+				elif name in ["tri", "triangle"]:
+					values[i] = cls.filterTriangle(*args, **kwargs)
+				elif name in ["plateau"]:
+					values[i] = cls.filterPlateau (*args, **kwargs)
+				else:
+					raise ValueError("Unknown LR schedule {}!".format(repr(name)))
+				
+				values[i] = nauka.utils.lr.fromSpec(Namespace(**values[i]))
+		if   len(values) == 0:
+			return nauka.utils.lr.ConstLR()
+		elif len(values) == 1:
+			return values[0]
 		else:
-			raise ValueError("Unknown LR schedule {}!".format(repr(name)))
+			return nauka.utils.lr.ProdLR(*values)
 	
 	@classmethod
 	def fromFilter    (cls, d, name):
@@ -470,14 +474,6 @@ class LRSchedule         (Action):
 	def filterConst   (cls, lr=1.0):
 		lr    = float(lr)
 		return cls.fromFilter(locals(), "const")
-	@classmethod
-	def filterProd    (cls):
-		return cls.fromFilter(locals(), "prod")
-	@classmethod
-	def filterClamp   (cls, lrMin=None, lrMax=None):
-		lrMin = lrMin if lrMin is None else float(lrMin)
-		lrMax = lrMax if lrMax is None else float(lrMax)
-		return cls.fromFilter(locals(), "clamp")
 	@classmethod
 	def filterStep    (cls, stepSize, gamma=0.95):
 		stepSize = int(stepSize)
