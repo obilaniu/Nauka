@@ -7,7 +7,7 @@
 # standard Python library packages, plus numpy.
 #
 
-from   .  import numpy, random, torch
+from   .  import lr, numpy, random, torch
 
 
 def toBytesUTF8(x, errors="strict"):
