@@ -3,6 +3,93 @@ import argparse, ast, os, re, sys, warnings
 from   argparse import (ArgumentParser,
                         Action,
                         Namespace,)
+import nauka.utils.lr
+
+
+#
+# WARNING: EXTREMELY ugly string-parsing code.
+# If it can be rewritten with re.match() magic, it should.
+#
+def _parseSpec(values):
+	"""
+	Split the argument string. Example:
+	
+	--arg name:value0,value1,key2=value2,key3=value3
+	
+	gets split into
+	
+	name, args, kwargs = (
+	    "name",
+	    (value0, value1),
+	    {"key2":value2, "key3":value3},
+	)
+	"""
+	split  = values.split(":", 1)
+	name   = split[0].strip()
+	rest   = split[1] if len(split) == 2 else ""
+	args   = []
+	kwargs = {}
+	
+	def carveRest(s, sep):
+		quotepairs = {"'": "'", "\"": "\"", "{":"}", "[":"]", "(":")"}
+		val   = ""
+		quote = ""
+		prevC = ""
+		for i, c in enumerate(s):
+			if quote:
+				if   c == quote[-1]  and prevC != "\\":
+					val    += c
+					prevC   = ""
+					quote   = quote[:-1]
+				elif c in quotepairs and prevC != "\\":
+					val    += c
+					prevC   = ""
+					quote  += quotepairs[c]
+				elif prevC == "\\":
+					val     = val[:-1]+c
+					prevC   = ""
+				else:
+					val    += c
+					prevC   = c
+			else:
+				if   c == sep:
+					break
+				elif c in quotepairs and prevC != "\\":
+					val    += c
+					prevC   = ""
+					quote  += quotepairs[c]
+				elif prevC == "\\":
+					val     = val[:-1]+c
+					prevC   = ""
+				else:
+					val    += c
+					prevC   = c
+			
+		return val, s[i+1:]
+	
+	while rest:
+		positionalVal, positionalRest = carveRest(rest, ",")
+		keywordKey,    keywordRest    = carveRest(rest, "=")
+		
+		#
+		# If the distance to the first "=" (or end-of-string) is STRICTLY
+		# shorter than the distance to the first ",", we have found a
+		# keyword argument.
+		#
+		
+		if len(keywordKey)<len(positionalVal):
+			key       = re.sub("\\s+", "", keywordKey)
+			val, rest = carveRest(keywordRest, ",")
+			try:    kwargs[key] = ast.literal_eval(val)
+			except: kwargs[key] = val
+		else:
+			if len(kwargs) > 0:
+				raise ValueError("Positional argument "+repr(r)+" found after first keyword argument!")
+			val, rest = positionalVal, positionalRest
+			try:    args += [ast.literal_eval(val)]
+			except: args += [val]
+	
+	return name, args, kwargs
 
 
 #
@@ -68,81 +155,9 @@ class Optimizer          (Action):
 	def __call__(self, parser, ns, values, option_string):
 		setattr(ns, self.dest, Namespace(**self.parseOptSpec(values)))
 	
-	@classmethod
 	def parseOptSpec   (cls, values):
-		#
-		# Split the argument string. Example:
-		#
-		# --arg optimizername:key0,key1,key2=value0,key3=value1
-		#
-		split  = values.split(":", 1)
-		name   = split[0].strip()
-		rest   = split[1] if len(split) == 2 else ""
-		args   = []
-		kwargs = {}
+		name, args, kwargs = _parseSpec(values)
 		
-		def carveRest(s, sep):
-			quotepairs = {"'": "'", "\"": "\"", "{":"}", "[":"]", "(":")"}
-			val   = ""
-			quote = ""
-			prevC = ""
-			for i, c in enumerate(s):
-				if quote:
-					if   c == quote[-1]  and prevC != "\\":
-						val    += c
-						prevC   = ""
-						quote   = quote[:-1]
-					elif c in quotepairs and prevC != "\\":
-						val    += c
-						prevC   = ""
-						quote  += quotepairs[c]
-					elif prevC == "\\":
-						val     = val[:-1]+c
-						prevC   = ""
-					else:
-						val    += c
-						prevC   = c
-				else:
-					if   c == sep:
-						break
-					elif c in quotepairs and prevC != "\\":
-						val    += c
-						prevC   = ""
-						quote  += quotepairs[c]
-					elif prevC == "\\":
-						val     = val[:-1]+c
-						prevC   = ""
-					else:
-						val    += c
-						prevC   = c
-				
-			return val, s[i+1:]
-		
-		while rest:
-			positionalVal, positionalRest = carveRest(rest, ",")
-			keywordKey,    keywordRest    = carveRest(rest, "=")
-			
-			#
-			# If the distance to the first "=" (or end-of-string) is STRICTLY
-			# shorter than the distance to the first ",", we have found a
-			# keyword argument.
-			#
-			
-			if len(keywordKey)<len(positionalVal):
-				key       = re.sub("\\s+", "", keywordKey)
-				val, rest = carveRest(keywordRest, ",")
-				try:    kwargs[key] = ast.literal_eval(val)
-				except: kwargs[key] = val
-			else:
-				if len(kwargs) > 0:
-					raise ValueError("Positional optimizer argument \""+r+"\" found after first keyword argument!")
-				val, rest = positionalVal, positionalRest
-				try:    args += [ast.literal_eval(val)]
-				except: args += [val]
-		
-		#
-		# Parse argument string according to optimizer
-		#
 		if   name in ["sgd"]:
 			return cls.filterSGD(*args, **kwargs)
 		elif name in ["nag"]:
@@ -393,4 +408,115 @@ class TmpDir             (_Dir):
 	ENVVAR     = "NAUKA_TMPDIR"
 	DEFDEFVAL  = "tmp"
 	HELPSTRING = "Path to a local, fast-storage, temporary directory."
+
+class LRSchedule         (Action):
+	def __init__(self, **kwargs):
+		defaultOpt = kwargs.setdefault("default", [])
+		if   isinstance(defaultOpt, (list, tuple, set)):
+			defaultOpt = list(defaultOpt)
+		elif isinstance(defaultOpt, (int, float)):
+			defaultOpt = [Namespace(**self.parseLRSpec("k:"+str(defaultOpt)))]
+		elif isinstance(defaultOpt, str):
+			defaultOpt = [Namespace(**self.parseLRSpec(defaultOpt))]
+		else:
+			raise ValueError("Invalid LR default={}"+repr(defaultOpt))
+		kwargs["default"] = defaultOpt
+		kwargs["metavar"] = "LRSPEC"
+		kwargs["nargs"]   = None
+		kwargs["type"]    = str
+		super().__init__(**kwargs)
+	
+	def __call__(self, parser, ns, values, option_string):
+		l = getattr(ns, self.dest, [])
+		l.append(Namespace(**self.parseLRSpec(values)))
+		setattr(ns, self.dest, l)
+	
+	@classmethod
+	def parseLRSpec   (cls, values):
+		try:
+			return nauka.utils.lr.ConstLR(values)
+		except: pass
+		name, args, kwargs = _parseSpec(values)
+		
+		if   name in ["lambda"]:
+			raise ValueError("LR schedule {} cannot be parsed from arguments!".format(repr(name)))
+		elif name in ["k", "const", "constant"]:
+			return cls.filterConst   (*args, **kwargs)
+		elif name in ["prod", "product"]:
+			return cls.filterProd    (*args, **kwargs)
+		elif name in ["clamp"]:
+			return cls.filterClamp   (*args, **kwargs)
+		elif name in ["step"]:
+			return cls.filterStep    (*args, **kwargs)
+		elif name in ["exp"]:
+			return cls.filterExp     (*args, **kwargs)
+		elif name in ["cos"]:
+			return cls.filterCos     (*args, **kwargs)
+		elif name in ["saw", "sawtooth"]:
+			return cls.filterSawtooth(*args, **kwargs)
+		elif name in ["tri", "triangle"]:
+			return cls.filterTriangle(*args, **kwargs)
+		elif name in ["plateau"]:
+			return cls.filterPlateau (*args, **kwargs)
+		else:
+			raise ValueError("Unknown LR schedule {}!".format(repr(name)))
+	
+	@classmethod
+	def fromFilter    (cls, d, name):
+		d["name"] = name
+		d.pop("cls", None)
+		return d
+	@classmethod
+	def filterConst   (cls, lr=1.0):
+		lr    = float(lr)
+		return cls.fromFilter(locals(), "const")
+	@classmethod
+	def filterProd    (cls):
+		return cls.fromFilter(locals(), "prod")
+	@classmethod
+	def filterClamp   (cls, lrMin=None, lrMax=None):
+		lrMin = lrMin if lrMin is None else float(lrMin)
+		lrMax = lrMax if lrMax is None else float(lrMax)
+		return cls.fromFilter(locals(), "clamp")
+	@classmethod
+	def filterStep    (cls, stepSize, gamma=0.95):
+		stepSize = int(stepSize)
+		gamma    = float(gamma)
+		return cls.fromFilter(locals(), "step")
+	@classmethod
+	def filterExp     (cls, gamma=0.95):
+		gamma    = float(gamma)
+		return cls.fromFilter(locals(), "exp")
+	@classmethod
+	def filterCos     (cls, period, lrA=1.0, lrB=0.0):
+		period = int(period)
+		lrA    = float(lrA)
+		lrB    = float(lrB)
+		return cls.fromFilter(locals(), "cos")
+	@classmethod
+	def filterSawtooth(cls, period, lrA=1.0, lrB=0.0):
+		period = int(period)
+		lrA    = float(lrA)
+		lrB    = float(lrB)
+		return cls.fromFilter(locals(), "sawtooth")
+	@classmethod
+	def filterTriangle(cls, period, lrA=1.0, lrB=4.0):
+		period = int(period)
+		lrA    = float(lrA)
+		lrB    = float(lrB)
+		return cls.fromFilter(locals(), "triangle")
+	@classmethod
+	def filterPlateau (cls, patience=10, cooldown=0, gamma=0.1, threshold=1e-4,
+	                   lrMin=0, eps=1e-8, mode="min", thresholdMode="rel",
+	                   verbose=False):
+		patience      = int(patience)
+		cooldown      = int(cooldown)
+		gamma         = float(gamma)
+		threshold     = float(threshold)
+		lrMin         = float(lrMin)
+		eps           = float(eps)
+		mode          = str(mode)
+		thresholdMode = str(thresholdMode)
+		verbose       = bool(verbose)
+		return cls.fromFilter(locals(), "plateau")
 

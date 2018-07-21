@@ -2,12 +2,77 @@
 import numbers, math
 
 
-class LR(numbers.Real):
+
+#
+# Parse from spec
+#
+def fromSpecSingle(spec, *args, **kwargs):
+	if   spec.name == "const":
+		return ConstLR(spec.lr)
+	elif spec.name == "prod":
+		return ProdLR(*args)
+	elif spec.name == "clamp":
+		return ClampLR(kwargs["lr"], spec.lrMin, spec.lrMax)
+	elif spec.name == "step":
+		return StepLR(spec.stepSize, spec.gamma)
+	elif spec.name == "exp":
+		return ExpLR(spec.gamma)
+	elif spec.name == "cos":
+		return CosLR(spec.period, spec.lrA, spec.lrB)
+	elif spec.name == "sawtooth":
+		return SawtoothLR(spec.period, spec.lrA, spec.lrB)
+	elif spec.name == "triangle":
+		return TriangleLR(spec.period, spec.lrA, spec.lrB)
+	elif spec.name == "plateau":
+		return PlateauLR(spec.patience, spec.cooldown, spec.gamma,
+		                 spec.threshold, spec.lrMin, spec.eps, spec.mode,
+		                 spec.thresholdMode, spec.verbose)
+	else:
+		raise NotImplementedError("LR Schedule "+spec.name+" not implemented!")
+
+def fromSpec(specs):
+	specs = list(specs)
+	
+	if len(specs) == 0:
+		return ConstLR()
+	if len(specs) == 1:
+		if specs[0].name == "clamp":
+			return fromSpecSingle(specs[0], lr=ConstLR())
+		else:
+			return fromSpecSingle(specs[0])
+	
+	i = 0
+	while i<len(specs):
+		if   specs[i].name == "prod":
+			specs[i] = fromSpecSingle(specs[i], *specs[:i])
+			specs    = specs[i:]
+			i        = 1
+		elif specs[i].name == "clamp":
+			if i==0:
+				specs[i] = fromSpecSingle(specs[i], lr=ConstLR())
+				i += 1
+			else:
+				specs[i] = fromSpecSingle(specs[i], lr=specs[i-1])
+				specs.pop(i-1)
+		else:
+			specs[i] = fromSpecSingle(specs[i])
+			i       += 1
+	
+	if len(specs) == 1:
+		return specs[0]
+	else:
+		return ProdLR(*specs)
+
+
+#
+# LR Schedules
+#
+
+class _LRBase(numbers.Real):
 	def __new__      (cls, *args, **kwargs):
 		lr = super().__new__(cls)
 		lr._stepNum = 0
 		return lr
-	def __float__    (self):    return 1.
 	def __bool__     (self):    return bool(float(self))
 	def __abs__      (self):    return abs(float(self))
 	def __add__      (self, x): return float(self) +  x
@@ -28,7 +93,7 @@ class LR(numbers.Real):
 	def __pow__      (self, x): return pow(float(self), x)
 	def __radd__     (self, x): return x +  float(self)
 	def __rdivmod__  (self, x): return divmod(x, float(self))
-	def __repr__     (self):    return "LR()"
+	def __repr__     (self):    return "_LRBase()"
 	def __rfloordiv__(self, x): return x // float(self)
 	def __rmod__     (self, x): return x %  float(self)
 	def __rmul__     (self, x): return x *  float(self)
@@ -41,35 +106,33 @@ class LR(numbers.Real):
 	def __truediv__  (self, x): return float(self) /  x
 	def __trunc__    (self):    return math.trunc(float(self))
 	
-	def step         (self, *, memo=None):
+	def step         (self, *, memo=None, **kwargs):
 		if memo is None:
 			memo = set() # Recursive descent begins now.
 		if id(self) not in memo:
 			memo.add(id(self))
-			self._step()
+			self._step(**kwargs)
 			for child in self.children:
-				if isinstance(child, LR):
-					child.step(memo=memo)
+				if isinstance(child, _LRBase):
+					child.step(memo=memo, **kwargs)
 	
-	def _step        (self):
-		self._stepNum += 1
+	def _step        (self):    self._stepNum += 1
 	
 	@property
-	def stepNum      (self):    return self._stepNum
+	def stepNum      (self):    return int(self._stepNum)
 	@property
 	def children     (self):    return []
 
-
-class ConstantLR(LR):
+class ConstLR(_LRBase):
 	def __init__     (self, lr=1.0):
 		self._lr = float(lr)
 	def __float__    (self):
 		return self._lr
 	def __repr__     (self):
-		return "ConstantLR(lr={})".format(repr(self._lr))
+		return "ConstLR(lr={})".format(repr(self._lr))
 
 
-class LambdaLR(LR):
+class LambdaLR(_LRBase):
 	def __init__     (self, lrLambda=lambda stepNum: 1.0):
 		self._lrLambda = lrLambda
 	def __float__    (self):
@@ -78,13 +141,12 @@ class LambdaLR(LR):
 		return "LambdaLR(lrLambda={})".format(repr(self._lrLambda))
 
 
-class ProdLR(LR):
+class ProdLR(_LRBase):
 	def __init__     (self, *children):
 		self._children = children
 	def __float__    (self):
 		product = 1.0
-		for lr in self._children:
-			product *= lr
+		for lr in self._children: product *= float(lr)
 		return product
 	def __repr__     (self):
 		return "ProdLR({})".format(", ".join(
@@ -94,28 +156,29 @@ class ProdLR(LR):
 	def children     (self): return self._children
 
 
-class ClampLR(LR):
+class ClampLR(_LRBase):
 	def __new__      (cls,  lr, lrMin=None, lrMax=None):
 		if lr is None:
 			raise ValueError("Invalid LR: "+repr(lr))
 		if lrMin is None and lrMax is None:
 			# Don't bother creating a wrapper ClampLR object if it isn't going
 			# to accomplish anything whatsoever.
-			if   isinstance(lr, LR):
+			if   isinstance(lr, _LRBase):
 				return lr
-			elif isinstance(lr, numbers.Real):
-				return ConstantLR(lr)
 			else:
-				raise ValueError("Invalid LR: "+repr(lr))
+				try:
+					return ConstLR(lr)
+				except e:
+					raise ValueError("Invalid LR: "+repr(lr)) from e
 		return super().__new__(cls)
 	def __init__     (self, lr, lrMin=None, lrMax=None):
 		self._lr    = lr
-		self._lrMin = lrMin
-		self._lrMax = lrMax
+		self._lrMin = lrMin if lrMin is None else float(lrMin)
+		self._lrMax = lrMax if lrMax is None else float(lrMax)
 	def __float__    (self):
 		lr = float(self._lr)
-		lr = lr if self._lrMax is None else min(lr, float(self._lrMax))
-		lr = lr if self._lrMin is None else max(lr, float(self._lrMin))
+		lr = lr if self._lrMax is None else min(lr, self._lrMax)
+		lr = lr if self._lrMin is None else max(lr, self._lrMin)
 		return lr
 	def __repr__     (self):
 		return "ClampLR(lr={}, lrMin={}, lrMax={})".format(
@@ -127,10 +190,10 @@ class ClampLR(LR):
 	def children     (self): return [self._lr]
 
 
-class StepLR(LR):
+class StepLR(_LRBase):
 	def __init__     (self, stepSize, gamma=0.95):
-		self._stepSize = stepSize
-		self._gamma    = gamma
+		self._stepSize = int(stepSize)
+		self._gamma    = float(gamma)
 	def __float__    (self):
 		return self._gamma ** (self.stepNum // self._stepSize)
 	def __repr__     (self):
@@ -140,20 +203,20 @@ class StepLR(LR):
 		)
 
 
-class ExpLR(LR):
+class ExpLR(_LRBase):
 	def __init__     (self, gamma=0.95):
-		self._gamma = gamma
+		self._gamma = float(gamma)
 	def __float__    (self):
 		return self._gamma ** self.stepNum
 	def __repr__     (self):
 		return "ExpLR(gamma={})".format(repr(self._gamma))
 
 
-class CosLR(LR):
+class CosLR(_LRBase):
 	def __init__     (self, period, lrA=1.0, lrB=0.0):
-		self._period = period
-		self._lrA    = lrA
-		self._lrB    = lrB
+		self._period = int(period)
+		self._lrA    = float(lrA)
+		self._lrB    = float(lrB)
 	def __float__    (self):
 		if self._period < 2: return self._lrA
 		periodf = self._period
@@ -169,11 +232,11 @@ class CosLR(LR):
 		)
 
 
-class SawtoothLR(LR):
+class SawtoothLR(_LRBase):
 	def __init__     (self, period, lrA=1.0, lrB=0.0):
-		self._period = period
-		self._lrA    = lrA
-		self._lrB    = lrB
+		self._period = int(period)
+		self._lrA    = float(lrA)
+		self._lrB    = float(lrB)
 	def __float__    (self):
 		if self._period < 2: return self._lrA
 		periodf   = self._period
@@ -188,11 +251,11 @@ class SawtoothLR(LR):
 		)
 
 
-class TriangleLR(LR):
+class TriangleLR(_LRBase):
 	def __init__     (self, period, lrA=1.0, lrB=4.0):
-		self._period = period
-		self._lrA    = lrA
-		self._lrB    = lrB
+		self._period = int(period)
+		self._lrA    = float(lrA)
+		self._lrB    = float(lrB)
 	def __float__    (self):
 		if self._period < 2: return self._lrA
 		periodf   = self._period
@@ -212,11 +275,14 @@ class TriangleLR(LR):
 		)
 
 
-class PlateauLR(LR):
+class PlateauLR(_LRBase):
 	"""Mostly lifted from https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#ReduceLROnPlateau"""
 	def __init__     (self, patience=10, cooldown=0, gamma=0.1, threshold=1e-4,
 	                        lrMin=0, eps=1e-8, mode="min", thresholdMode="rel",
 	                        verbose=False):
+		gamma         = float(gamma)
+		mode          = str(mode)
+		thresholdMode = str(thresholdMode)
 		if gamma >= 1.0:
 			raise ValueError("Invalid gamma {} >= 1.0!".format(repr(gamma)))
 		if mode          not in {"min", "max"}:
@@ -224,23 +290,23 @@ class PlateauLR(LR):
 		if thresholdMode not in {"rel", "abs"}:
 			raise ValueError("Unknown thresholdMode={}!".format(repr(thresholdMode)))
 		
-		self._lr              = 1.0
-		self._patience        = patience
-		self._cooldown        = cooldown
-		self._gamma           = gamma
-		self._threshold       = threshold
-		self._lrMin           = lrMin
-		self._eps             = eps
-		self._mode            = mode
-		self._thresholdMode   = thresholdMode
-		self._verbose         = verbose
+		self._patience        = int  (patience)
+		self._cooldown        = int  (cooldown)
+		self._gamma           = float(gamma)
+		self._threshold       = float(threshold)
+		self._lrMin           = float(lrMin)
+		self._eps             = float(eps)
+		self._mode            = str  (mode)
+		self._thresholdMode   = str  (thresholdMode)
+		self._verbose         = bool (verbose)
 		
+		self._lr              = 1.0
 		self._best            = math.inf if mode=="min" else -math.inf
 		self._numBadSteps     = 0
 		self._cooldownCounter = 0
 	
 	def __float__    (self):
-		return float(self._lr)
+		return self._lr
 	
 	def __repr__     (self):
 		return "PlateauLR(patience={}, cooldown={}, gamma={}, threshold={}, " \
@@ -256,13 +322,13 @@ class PlateauLR(LR):
 		    repr(self._verbose),
 		)
 	
-	def _step        (self):
-		if not hasattr(self, "current"):
+	def _step        (self, metric=None):
+		if metric is None:
 			return
-		current = float(self.__dict__.pop("current"))
+		metric = float(metric)
 		
-		if self._isNewBest(current):
-			self._best         = current
+		if self._isNewBest(metric):
+			self._best         = metric
 			self._numBadSteps  = 0
 		else:
 			self._numBadSteps += 1
@@ -275,7 +341,7 @@ class PlateauLR(LR):
 			self._cooldownCounter = self._cooldown
 			self._numBadSteps     = 0
 			lrOld = float(self._lr)
-			lrNew = float(max(lrOld*self._gamma, self._lrMin))
+			lrNew = max(lrOld*self._gamma, self._lrMin)
 			if lrOld-lrNew > self._eps:
 				self._lr = lrNew
 				if self._verbose:
@@ -285,19 +351,19 @@ class PlateauLR(LR):
 		
 		super()._step()
 	
-	def _isNewBest(self, current):
+	def _isNewBest(self, metric):
 		if self._mode=="min":
 			if self._thresholdMode=="rel":
 				dynamicBest = self._best*(1.-self._threshold)
 			else:
 				dynamicBest = self._best-self._threshold
-			return current < dynamicBest
+			return metric < dynamicBest
 		else:
 			if self._thresholdMode=="rel":
 				dynamicBest = self._best*(1.+self._threshold)
 			else:
 				dynamicBest = self._best+self._threshold
-			return current > dynamicBest
+			return metric > dynamicBest
 	
 	@property
 	def _coolingDown (self):
