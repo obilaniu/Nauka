@@ -20,11 +20,19 @@ def fromSpec(spec):
 	elif spec.name == "triangle":
 		return TriangleLR(spec.period, spec.lrA, spec.lrB)
 	elif spec.name == "plateau":
-		return PlateauLR(spec.patience, spec.cooldown, spec.gamma,
-		                 spec.threshold, spec.lrMin, spec.eps, spec.mode,
-		                 spec.thresholdMode, spec.verbose)
+		return PlateauLR(spec.patience,  spec.cooldown,      spec.gamma,
+		                 spec.threshold, spec.lrMin,         spec.eps,
+		                 spec.mode,      spec.thresholdMode, spec.verbose)
 	else:
 		raise NotImplementedError("LR Schedule "+spec.name+" not implemented!")
+
+def fromSpecList(specs):
+	if   len(specs) == 0:
+		return ConstLR()
+	elif len(specs) == 1:
+		return fromSpec(*specs)
+	else:
+		return ProdLR(*[fromSpec(s) for s in specs])
 
 
 #
@@ -32,6 +40,7 @@ def fromSpec(spec):
 #
 
 class _LRBase(numbers.Real):
+	__slots__ = ["__dict__", "__weakref__", "_stepNum"]
 	def __new__      (cls, *args, **kwargs):
 		lr = super().__new__(cls)
 		lr._stepNum = 0
@@ -39,7 +48,7 @@ class _LRBase(numbers.Real):
 	def __bool__     (self):    return bool(float(self))
 	def __abs__      (self):    return abs(float(self))
 	def __add__      (self, x): return float(self) +  x
-	def __ceil__     (self):    return math.ceil (float(self))
+	def __ceil__     (self):    return math.ceil(float(self))
 	def __divmod__   (self, x): return divmod(float(self), x)
 	def __eq__       (self, x): return float(self) == x
 	def __floor__    (self):    return math.floor(float(self))
@@ -78,6 +87,7 @@ class _LRBase(numbers.Real):
 			for child in self.children:
 				if isinstance(child, _LRBase):
 					child.step(memo=memo, **kwargs)
+		return self
 	
 	def _step        (self, *args, **kwargs):
 		self._stepNum += 1
@@ -88,6 +98,7 @@ class _LRBase(numbers.Real):
 	def children     (self):    return []
 
 class ConstLR(_LRBase):
+	__slots__ = ["_lr"]
 	def __init__     (self, lr=1.0):
 		self._lr = float(lr)
 	def __float__    (self):
@@ -97,6 +108,7 @@ class ConstLR(_LRBase):
 
 
 class LambdaLR(_LRBase):
+	__slots__ = ["_lrLambda"]
 	def __init__     (self, lrLambda=lambda stepNum: 1.0):
 		self._lrLambda = lrLambda
 	def __float__    (self):
@@ -106,6 +118,7 @@ class LambdaLR(_LRBase):
 
 
 class ProdLR(_LRBase):
+	__slots__ = ["_children"]
 	def __init__     (self, *children):
 		self._children = children
 	def __float__    (self):
@@ -121,6 +134,7 @@ class ProdLR(_LRBase):
 
 
 class ClampLR(_LRBase):
+	__slots__ = ["_lr", "_lrMin", "_lrMax"]
 	def __new__      (cls,  lr, lrMin=None, lrMax=None):
 		if lr is None:
 			raise ValueError("Invalid LR: "+repr(lr))
@@ -155,6 +169,7 @@ class ClampLR(_LRBase):
 
 
 class StepLR(_LRBase):
+	__slots__ = ["_stepSize", "_gamma"]
 	def __init__     (self, stepSize, gamma=0.95):
 		self._stepSize = int(stepSize)
 		self._gamma    = float(gamma)
@@ -168,6 +183,7 @@ class StepLR(_LRBase):
 
 
 class ExpLR(_LRBase):
+	__slots__ = ["_gamma"]
 	def __init__     (self, gamma=0.95):
 		self._gamma = float(gamma)
 	def __float__    (self):
@@ -177,6 +193,7 @@ class ExpLR(_LRBase):
 
 
 class CosLR(_LRBase):
+	__slots__ = ["_period", "_lrA", "_lrB"]
 	def __init__     (self, period, lrA=1.0, lrB=0.0):
 		self._period = int(period)
 		self._lrA    = float(lrA)
@@ -197,6 +214,7 @@ class CosLR(_LRBase):
 
 
 class SawtoothLR(_LRBase):
+	__slots__ = ["_period", "_lrA", "_lrB"]
 	def __init__     (self, period, lrA=1.0, lrB=0.0):
 		self._period = int(period)
 		self._lrA    = float(lrA)
@@ -216,6 +234,7 @@ class SawtoothLR(_LRBase):
 
 
 class TriangleLR(_LRBase):
+	__slots__ = ["_period", "_lrA", "_lrB"]
 	def __init__     (self, period, lrA=1.0, lrB=4.0):
 		self._period = int(period)
 		self._lrA    = float(lrA)
@@ -241,6 +260,9 @@ class TriangleLR(_LRBase):
 
 class PlateauLR(_LRBase):
 	"""Mostly lifted from https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#ReduceLROnPlateau"""
+	__slots__ = ["_patience", "_cooldown", "_gamma", "_threshold", "_lrMin",
+	             "_eps", "_mode", "_thresholdMode", "_verbose", "_lr", "_best",
+	             "_numBadSteps", "_cooldownCounter"]
 	def __init__     (self, patience=10, cooldown=0, gamma=0.1, threshold=1e-4,
 	                        lrMin=0, eps=1e-8, mode="min", thresholdMode="rel",
 	                        verbose=False):

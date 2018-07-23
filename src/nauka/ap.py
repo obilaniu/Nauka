@@ -431,13 +431,12 @@ class LRSchedule         (Action):
 	
 	@classmethod
 	def parseLRSpec   (cls, values):
-		values = values.split("\\")
+		values = values.split("*")
 		for i in range(len(values)):
 			try:
-				values[i] = nauka.utils.lr.ConstLR(values[i])
+				values[i] = cls.filterConst   (float(values[i]))
 			except:
 				name, args, kwargs = _parseSpec(values[i])
-				
 				if   name in ["lambda", "prod", "product", "clamp"]:
 					raise ValueError("LR schedule {} cannot be parsed from arguments!".format(repr(name)))
 				elif name in ["k", "const", "constant"]:
@@ -456,14 +455,9 @@ class LRSchedule         (Action):
 					values[i] = cls.filterPlateau (*args, **kwargs)
 				else:
 					raise ValueError("Unknown LR schedule {}!".format(repr(name)))
-				
-				values[i] = nauka.utils.lr.fromSpec(Namespace(**values[i]))
-		if   len(values) == 0:
-			return nauka.utils.lr.ConstLR()
-		elif len(values) == 1:
-			return values[0]
-		else:
-			return nauka.utils.lr.ProdLR(*values)
+			
+			values[i] = Namespace(**values[i])
+		return values
 	
 	@classmethod
 	def fromFilter    (cls, d, name):
