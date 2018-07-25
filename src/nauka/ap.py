@@ -150,6 +150,7 @@ class Optimizer          (Action):
 		kwargs["metavar"] = "OPTSPEC"
 		kwargs["nargs"]   = None
 		kwargs["type"]    = str
+		kwargs.setdefault("help", "Optimizer selection.")
 		super().__init__(**kwargs)
 	
 	def __call__(self, parser, ns, values, option_string):
@@ -415,15 +416,16 @@ class LRSchedule         (Action):
 		if   isinstance(defaultOpt, (list, tuple, set)):
 			defaultOpt = list(defaultOpt)
 		elif isinstance(defaultOpt, (int, float)):
-			defaultOpt = [Namespace(**self.parseLRSpec("k:"+str(defaultOpt)))]
+			defaultOpt = self.parseLRSpec("k:"+str(defaultOpt))
 		elif isinstance(defaultOpt, str):
-			defaultOpt = [Namespace(**self.parseLRSpec(defaultOpt))]
+			defaultOpt = self.parseLRSpec(defaultOpt)
 		else:
 			raise ValueError("Invalid LR default="+repr(defaultOpt))
 		kwargs["default"] = defaultOpt
 		kwargs["metavar"] = "LRSPEC"
 		kwargs["nargs"]   = None
 		kwargs["type"]    = str
+		kwargs.setdefault("help", "Learning rate schedule.")
 		super().__init__(**kwargs)
 	
 	def __call__(self, parser, ns, values, option_string):
