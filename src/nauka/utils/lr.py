@@ -7,7 +7,9 @@ import numbers, math
 # Parse from spec
 #
 def fromSpec(spec):
-	if   spec.name == "const":
+	if   isinstance(spec, numbers.Real):
+		return ConstLR(spec)
+	elif spec.name == "const":
 		return ConstLR(spec.lr)
 	elif spec.name == "step":
 		return StepLR(spec.stepSize, spec.gamma)
