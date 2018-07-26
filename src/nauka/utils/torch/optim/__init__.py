@@ -18,3 +18,14 @@ def fromSpec(params, spec, **kwargs):
 		               **kwargs)
 	else:
 		raise NotImplementedError("Optimizer "+spec.name+" not implemented!")
+
+def setLR(optimizer, lr):
+	if   isinstance(lr, dict):
+		for paramGroup in optimizer.param_groups:
+			paramGroup["lr"] = lr[paramGroup]
+	elif isinstance(lr, list):
+		for paramGroup, lritem in zip(optimizer.param_groups, lr):
+			paramGroup["lr"] = lritem
+	else:
+		for paramGroup in optimizer.param_groups:
+			paramGroup["lr"] = lr
