@@ -65,25 +65,6 @@ def createWorkDir(baseDir,
 		os.symlink(os.path.relpath(byuuidPath, bynameDir), bynamePath, True)
 	
 	#
-	# Create handy .rsync-filter files.
-	#
-	with contextlib.suppress(OSError):
-		with open(os.path.join(baseDir, ".rsync-filter"), "x") as f:
-			f.write("#\n"
-			        "# rsync filter rules.\n"
-			        "#\n"
-			        "# When the argument -F is given to rsync, the rules within will be obeyed.\n"
-			        "#\n")
-	
-	with contextlib.suppress(OSError):
-		with open(os.path.join(projDir, ".rsync-filter"), "x") as f:
-			f.write("#\n"
-			        "# rsync filter rules.\n"
-			        "#\n"
-			        "# When the argument -F is given to rsync, the rules within will be obeyed.\n"
-			        "#\n")
-	
-	#
 	# Return the constructed workDir.
 	#
 	return byuuidPath
